@@ -8,37 +8,50 @@ services:
     container_name: gluetun
     cap_add:
       - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
       - VPN_TYPE=${VPN_TYPE:-wireguard}
-      # WireGuard (Mullvad, NordVPN, ProtonVPN, etc.)
-      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
-      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
-      # OpenVPN providers — uncomment and remove wireguard lines if needed
-      # - OPENVPN_USER=${OPENVPN_USER}
-      # - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY:-}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES:-}
+      - OPENVPN_USER=${OPENVPN_USER:-}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD:-}
       - SERVER_COUNTRIES=${VPN_SERVER_COUNTRIES:-Netherlands}
-    # qBittorrent's web UI is exposed through gluetun's network namespace
+    # Ports bind to 0.0.0.0 so the stack survives DHCP IP changes.
+    # Access is restricted to LAN by the firewall rules set in setup.sh.
     ports:
-      - "${LAN_IP}:8080:8080"
+      - "8080:8080"
     volumes:
       - ${CONFIG_PATH}/gluetun:/gluetun
     networks:
-      - media
+      - arr
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s
       timeout: 10s
+      start_period: 10s
       retries: 3
 
   # ── Torrent client (runs inside gluetun's VPN namespace) ────────────────────
+  # Mounted at /data (same root as Radarr/Sonarr) so all containers agree on
+  # file paths and Radarr/Sonarr can import without remote path mappings.
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
     network_mode: service:gluetun
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       gluetun:
         condition: service_healthy
@@ -49,13 +62,22 @@ services:
       - WEBUI_PORT=8080
     volumes:
       - ${CONFIG_PATH}/qbittorrent:/config
-      - ${DOWNLOADS_PATH}:/downloads
+      - ${DATA_PATH}:/data
     restart: unless-stopped
 
   # ── Indexer aggregator ───────────────────────────────────────────────────────
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -63,65 +85,94 @@ services:
     volumes:
       - ${CONFIG_PATH}/prowlarr:/config
     ports:
-      - "${LAN_IP}:9696:9696"
+      - "9696:9696"
     networks:
-      - media
+      - arr
     restart: unless-stopped
 
   # ── Movie automation ─────────────────────────────────────────────────────────
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
       - ${CONFIG_PATH}/radarr:/config
-      - ${DOWNLOADS_PATH}:/downloads
-      - ${MEDIA_PATH}/movies:/movies
+      - ${DATA_PATH}:/data
     ports:
-      - "${LAN_IP}:7878:7878"
+      - "7878:7878"
     networks:
-      - media
+      - arr
     restart: unless-stopped
 
   # ── TV show automation ───────────────────────────────────────────────────────
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
       - ${CONFIG_PATH}/sonarr:/config
-      - ${DOWNLOADS_PATH}:/downloads
-      - ${MEDIA_PATH}/tv:/tv
+      - ${DATA_PATH}:/data
     ports:
-      - "${LAN_IP}:8989:8989"
+      - "8989:8989"
     networks:
-      - media
+      - arr
     restart: unless-stopped
 
   # ── Media server ─────────────────────────────────────────────────────────────
+  # Isolated on its own network — cannot reach the arr stack even if compromised.
   jellyfin:
-    image: jellyfin/jellyfin:latest
+    image: lscr.io/linuxserver/jellyfin:latest
     container_name: jellyfin
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
       - ${CONFIG_PATH}/jellyfin:/config
-      - ${MEDIA_PATH}/movies:/data/movies:ro
-      - ${MEDIA_PATH}/tv:/data/tv:ro
+      - ${DATA_PATH}/media:/data
     ports:
-      - "${LAN_IP}:8096:8096"
+      - "8096:8096"
     networks:
-      - media
+      - stream
     restart: unless-stopped
 
 networks:
-  media:
+  # arr stack — prowlarr, radarr, sonarr, gluetun (qbittorrent uses gluetun's namespace)
+  arr:
+    driver: bridge
+  # stream — jellyfin only, isolated from the arr stack
+  stream:
     driver: bridge
