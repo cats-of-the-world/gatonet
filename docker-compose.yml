@@ -65,6 +65,20 @@ services:
       - ${DATA_PATH}:/data
     restart: unless-stopped
 
+  # ── Cloudflare bypass (used by Prowlarr for CF-protected indexers) ──────────
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - LOG_LEVEL=info
+    ports:
+      - "8191:8191"
+    networks:
+      - arr
+    restart: unless-stopped
+
   # ── Indexer aggregator ───────────────────────────────────────────────────────
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
