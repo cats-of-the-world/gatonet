@@ -2,7 +2,7 @@ Disclaimer: LLMs were used to generate the configuration files.
 
 # GatoNet
 
-> *In Brazil, "fazer um gato" (to make a cat) is slang for tapping into a cable line to get free TV. GatoNet brings that spirit home — self-hosted, private, yours.*
+> *In Brazil, "fazer um gato" (to make a cat) is slang for tapping into a cable line to get free TV. GatoNet brings that spirit home - self-hosted, private, yours.*
 
 A containerized media stack for automated movie and TV show downloading and streaming. Runs entirely on your home network. Torrent traffic is tunneled through a commercial VPN with a kill-switch so your ISP never sees what you download.
 
@@ -15,15 +15,15 @@ A containerized media stack for automated movie and TV show downloading and stre
 | Prowlarr     | Indexer aggregator                            |
 | Radarr       | Movie automation                              |
 | Sonarr       | TV show automation                            |
-| Jellyfin     | Media server — stream from any browser or app |
+| Jellyfin     | Media server, stream from any browser or app  |
 
 ## Architecture
 
 ```
-Browser ──► Radarr / Sonarr ──► qBittorrent ──► [ VPN ] ──► Internet
-                  │                   │
+Browser --> Radarr / Sonarr --> qBittorrent --> [ VPN ] --> Internet
+                  |                   |
               Prowlarr            Downloads
-              (indexers)              │
+              (indexers)              |
                                Jellyfin (stream)
 ```
 
@@ -51,10 +51,10 @@ credentials, and writes a `chmod 600` `.env` file.
 
 **2. Get WireGuard credentials**
 
-- **Mullvad** — Account → WireGuard keys → Generate key
-- **NordVPN** — [NordVPN WireGuard setup](https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/nordvpn.md)
-- **ProtonVPN** — Account → Downloads → WireGuard configuration
-- **Other providers** — [Gluetun provider list](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers)
+- **Mullvad** - Account > WireGuard keys > Generate key
+- **NordVPN** - [NordVPN WireGuard setup](https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/nordvpn.md)
+- **ProtonVPN** - Account > Downloads > WireGuard configuration
+- **Other providers** - [Gluetun provider list](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers)
 
 **3. Run setup and start**
 
@@ -74,7 +74,7 @@ docker exec -it qbittorrent curl -s https://ipinfo.io/ip
 ## Web Interfaces
 
 Find your current IP with `hostname -I`. The stack keeps working even if DHCP
-assigns a new address — only the URL you type changes.
+assigns a new address - only the URL you type changes.
 
 | Service     | URL                        | Purpose                      |
 |-------------|----------------------------|------------------------------|
@@ -86,44 +86,44 @@ assigns a new address — only the URL you type changes.
 
 ## Post-start Wiring (one time)
 
-### qBittorrent — set save paths
-Tools → Options → Downloads:
+### qBittorrent: set save paths
+Tools > Options > Downloads:
 - Default save path: `/data/downloads/complete`
 - Temp path: `/data/downloads/incomplete`
 
-### Prowlarr → Radarr and Sonarr
-1. Prowlarr → Settings → Apps → Add → Radarr
+### Prowlarr to Radarr and Sonarr
+1. Prowlarr > Settings > Apps > Add > Radarr
    - Radarr URL: `http://radarr:7878`
-   - API key: Radarr → Settings → General
+   - API key: Radarr > Settings > General
 2. Repeat for Sonarr (`http://sonarr:8989`)
 
-### Radarr and Sonarr → qBittorrent
+### Radarr and Sonarr to qBittorrent
 All containers share the same `/data` mount, so paths are consistent and no
 Remote Path Mapping is needed.
 
-1. Radarr → Settings → Download Clients → Add → qBittorrent
+1. Radarr > Settings > Download Clients > Add > qBittorrent
    - Host: `gluetun`, Port: `8080`, Category: `movies`
 2. Repeat for Sonarr (Category: `tv`)
 
-### Radarr → set paths
-Settings → Media Management:
+### Radarr: set paths
+Settings > Media Management:
 - Root folder: `/data/media/movies`
 
-### Sonarr → set paths
-Settings → Media Management:
+### Sonarr: set paths
+Settings > Media Management:
 - Root folder: `/data/media/tv`
 
-### Prowlarr → Add indexers
-Prowlarr → Indexers → Add → search for your preferred public or private indexers.
+### Prowlarr: add indexers
+Prowlarr > Indexers > Add > search for your preferred public or private indexers.
 
-### Jellyfin → Add libraries
-Dashboard → Libraries → Add Media Library:
-- Movies → `/data/movies`
-- TV Shows → `/data/tv`
+### Jellyfin: add libraries
+Dashboard > Libraries > Add Media Library:
+- Movies: `/data/movies`
+- TV Shows: `/data/tv`
 
 ## Usage
 
-Open Radarr or Sonarr in a browser, search for a title, select a quality profile and click **Add**. The stack handles the rest — search, download, rename, and import into Jellyfin automatically.
+Open Radarr or Sonarr in a browser, search for a title, select a quality profile and click **Add**. The stack handles the rest - search, download, rename, and import into Jellyfin automatically.
 
 ## Maintenance
 

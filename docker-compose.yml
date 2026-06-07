@@ -1,6 +1,6 @@
 services:
 
-  # ── VPN tunnel ──────────────────────────────────────────────────────────────
+  # VPN tunnel
   # All torrent traffic is routed through gluetun.
   # If the VPN drops, qBittorrent loses internet (kill-switch).
   gluetun:
@@ -36,7 +36,7 @@ services:
       start_period: 10s
       retries: 3
 
-  # ── Torrent client (runs inside gluetun's VPN namespace) ────────────────────
+  # Torrent client (runs inside gluetun's VPN namespace)
   # Mounted at /data (same root as Radarr/Sonarr) so all containers agree on
   # file paths and Radarr/Sonarr can import without remote path mappings.
   qbittorrent:
@@ -65,7 +65,7 @@ services:
       - ${DATA_PATH}:/data
     restart: unless-stopped
 
-  # ── Cloudflare bypass (used by Prowlarr for CF-protected indexers) ──────────
+  # Cloudflare bypass (used by Prowlarr for CF-protected indexers)
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: flaresolverr
@@ -79,7 +79,7 @@ services:
       - arr
     restart: unless-stopped
 
-  # ── Indexer aggregator ───────────────────────────────────────────────────────
+  # Indexer aggregator
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
@@ -104,7 +104,7 @@ services:
       - arr
     restart: unless-stopped
 
-  # ── Movie automation ─────────────────────────────────────────────────────────
+  # Movie automation
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
@@ -130,7 +130,7 @@ services:
       - arr
     restart: unless-stopped
 
-  # ── TV show automation ───────────────────────────────────────────────────────
+  # TV show automation
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
@@ -156,8 +156,8 @@ services:
       - arr
     restart: unless-stopped
 
-  # ── Media server ─────────────────────────────────────────────────────────────
-  # Isolated on its own network — cannot reach the arr stack even if compromised.
+  # Media server
+  # Isolated on its own network  - cannot reach the arr stack even if compromised.
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
     container_name: jellyfin
@@ -184,9 +184,9 @@ services:
     restart: unless-stopped
 
 networks:
-  # arr stack — prowlarr, radarr, sonarr, gluetun (qbittorrent uses gluetun's namespace)
+  # arr stack - prowlarr, radarr, sonarr, gluetun (qbittorrent uses gluetun's namespace)
   arr:
     driver: bridge
-  # stream — jellyfin only, isolated from the arr stack
+  # stream - jellyfin only, isolated from the arr stack
   stream:
     driver: bridge

@@ -10,7 +10,7 @@ if [[ ! -f .env ]]; then
 fi
 source .env
 
-# ── Directories ───────────────────────────────────────────────────────────────
+# Directories
 
 echo "==> Creating directory structure..."
 dirs=(
@@ -33,14 +33,14 @@ done
 echo "==> Setting ownership to ${PUID}:${PGID}..."
 chown -R "${PUID}:${PGID}" "$CONFIG_PATH" "$DATA_PATH"
 
-# ── /dev/net/tun ──────────────────────────────────────────────────────────────
+# /dev/net/tun
 
 echo "==> Checking /dev/net/tun..."
 if [[ ! -c /dev/net/tun ]]; then
   echo "WARNING: /dev/net/tun not found. Run: sudo modprobe tun"
 fi
 
-# ── Firewall ──────────────────────────────────────────────────────────────────
+# Firewall
 
 echo "==> Configuring firewall..."
 
@@ -59,7 +59,7 @@ if [[ -z "$_lan_subnet" ]]; then
 else
   echo "  Detected LAN subnet: $_lan_subnet (via $_wan_iface)"
 
-  # ── ufw ─────────────────────────────────────────────────────────────────────
+  # ufw
   if command -v ufw &>/dev/null; then
     for port in "${PORTS[@]}"; do
       # Delete old gatonet rules for this port to avoid duplicates on re-run.
@@ -85,7 +85,7 @@ else
     echo "  INFO: ufw not installed. Skipping ufw configuration."
   fi
 
-  # ── DOCKER-USER iptables chain ───────────────────────────────────────────────
+  # DOCKER-USER iptables chain
   # ufw rules are bypassed by Docker's own iptables rules for published ports.
   # DOCKER-USER is evaluated before Docker's ACCEPT rules and is the correct
   # place to restrict access to container ports.
@@ -112,11 +112,11 @@ else
 
     echo "  DOCKER-USER rules applied. Ports ${PORTS[*]} are LAN-only."
   else
-    echo "  NOTE: DOCKER-USER chain not found — start Docker first, then re-run this script."
+    echo "  NOTE: DOCKER-USER chain not found - start Docker first, then re-run this script."
   fi
 fi
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# Done
 
 _current_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "<your-server-ip>")
 

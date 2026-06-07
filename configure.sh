@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Wires up all services via their APIs. Safe to re-run — skips anything
+# Wires up all services via their APIs. Safe to re-run - skips anything
 # already configured.
 
 if [[ ! -f .env ]]; then
@@ -10,9 +10,9 @@ if [[ ! -f .env ]]; then
 fi
 source .env
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# Helpers
 
-section() { echo ""; echo "── $* ──"; }
+section() { echo ""; echo "$*:"; }
 
 wait_for() {
   local url="$1" name="$2"
@@ -50,7 +50,7 @@ arr_has() {
   curl -sf -H "X-Api-Key: $key" "$url" 2>/dev/null | grep -q "$needle"
 }
 
-# ── Wait for all services ─────────────────────────────────────────────────────
+# Wait for all services
 
 section "Waiting for services"
 wait_for "http://127.0.0.1:9696/api/v1/health" "Prowlarr"
@@ -58,7 +58,7 @@ wait_for "http://127.0.0.1:7878/api/v3/health" "Radarr"
 wait_for "http://127.0.0.1:8989/api/v3/health" "Sonarr"
 wait_for "http://127.0.0.1:8080"               "qBittorrent"
 
-# ── Read API keys from config files ──────────────────────────────────────────
+# Read API keys from config files
 
 section "Reading API keys"
 
@@ -74,7 +74,7 @@ echo "  Prowlarr : ${PROWLARR_KEY:0:8}..."
 echo "  Radarr   : ${RADARR_KEY:0:8}..."
 echo "  Sonarr   : ${SONARR_KEY:0:8}..."
 
-# ── qBittorrent ───────────────────────────────────────────────────────────────
+# qBittorrent
 
 section "qBittorrent"
 
@@ -89,7 +89,7 @@ QB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -c "$QB_JAR" \
   -d "username=$QB_USER&password=$QB_PASS" 2>/dev/null || true)
 
 if [[ "$QB_STATUS" != "200" && "$QB_STATUS" != "204" ]]; then
-  echo "  ERROR: login failed (HTTP $QB_STATUS) — check the password."
+  echo "  ERROR: login failed (HTTP $QB_STATUS) - check the password."
   rm -f "$QB_JAR"; exit 1
 fi
 
@@ -111,9 +111,9 @@ rm -f "$QB_JAR"
 echo "  Save paths configured."
 echo "  Network interface bound to $QB_IFACE (VPN tunnel only)."
 
-# ── Prowlarr → Radarr ────────────────────────────────────────────────────────
+# Prowlarr -> Radarr
 
-section "Prowlarr → Radarr"
+section "Prowlarr -> Radarr"
 
 if arr_has "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/applications" "\"Radarr\""; then
   echo "  Already connected, skipping."
@@ -124,9 +124,9 @@ else
   echo "  Connected."
 fi
 
-# ── Prowlarr → Sonarr ────────────────────────────────────────────────────────
+# Prowlarr -> Sonarr
 
-section "Prowlarr → Sonarr"
+section "Prowlarr -> Sonarr"
 
 if arr_has "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/applications" "\"Sonarr\""; then
   echo "  Already connected, skipping."
@@ -137,7 +137,7 @@ else
   echo "  Connected."
 fi
 
-# ── Radarr: download client + root folder ─────────────────────────────────────
+# Radarr: download client + root folder
 
 section "Radarr"
 
@@ -158,7 +158,7 @@ else
   echo "  Root folder /data/media/movies added."
 fi
 
-# ── Sonarr: download client + root folder ─────────────────────────────────────
+# Sonarr: download client + root folder
 
 section "Sonarr"
 
@@ -179,7 +179,7 @@ else
   echo "  Root folder /data/media/tv added."
 fi
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# Done
 
 echo ""
 echo "==> All done. Open Radarr or Sonarr and search for something to download."
