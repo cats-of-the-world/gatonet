@@ -107,8 +107,8 @@ bash configure.sh
 The script waits for all services to be ready, reads their API keys from the
 config files, and skips anything already configured so it is safe to re-run.
 
-After that, add indexers in Prowlarr (Indexers > Add) and add a Jellyfin media
-library pointing to `/data/media` (Dashboard > Libraries > Add Media Library).
+After that, add indexers in Prowlarr (Indexers > Add) and add a Jellyfin media library pointing to `/data/movies` and `/data/tv`
+(Dashboard > Libraries > Add Media Library).
 
 ## Web Interfaces
 
@@ -159,8 +159,8 @@ Prowlarr > Indexers > Add > search for your preferred public or private indexers
 
 ### Jellyfin: add libraries
 Dashboard > Libraries > Add Media Library:
-- Movies: `/data/media/movies`
-- TV Shows: `/data/media/tv`
+- Movies: `/data/movies`
+- TV Shows: `/data/tv`
 
 ## Usage
 
