@@ -30,15 +30,37 @@ Browser --> Radarr / Sonarr --> qBittorrent --> [ VPN ] --> Internet
 Ports bind to all interfaces but are restricted to LAN-only by firewall rules
 that `setup.sh` writes to both ufw and the `DOCKER-USER` iptables chain.
 
-## Requirements
+## Install
 
-- Docker + Docker Compose
-- A commercial VPN subscription with WireGuard support (Mullvad, NordVPN, ProtonVPN, etc.)
-- Linux host (amd64 or arm64)
+**Docker** (if not already installed):
 
-## Getting Started
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```
 
-**1. Clone and generate config**
+Log out and back in for the group change to take effect. Docker Compose is
+included with Docker Desktop and with the `docker-compose-plugin` package that
+the install script sets up automatically.
+
+Verify:
+
+```bash
+docker compose version
+```
+
+## Setup
+
+**1. Get VPN credentials**
+
+You need these before running the config script.
+
+- **Mullvad** - Account > WireGuard keys > Generate key
+- **NordVPN** - [NordVPN WireGuard setup](https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/nordvpn.md)
+- **ProtonVPN** - Account > Downloads > WireGuard configuration
+- **Other providers** - [Gluetun provider list](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers)
+
+**2. Clone and generate config**
 
 ```bash
 git clone https://github.com/youruser/gatonet.git
@@ -46,30 +68,47 @@ cd gatonet
 bash generate-env.sh
 ```
 
-The script auto-detects your user IDs and timezone, walks you through VPN
-credentials, and writes a `chmod 600` `.env` file.
+The script detects your user IDs and timezone, prompts for VPN credentials,
+and writes a `chmod 600` `.env` file.
 
-**2. Get WireGuard credentials**
-
-- **Mullvad** - Account > WireGuard keys > Generate key
-- **NordVPN** - [NordVPN WireGuard setup](https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/nordvpn.md)
-- **ProtonVPN** - Account > Downloads > WireGuard configuration
-- **Other providers** - [Gluetun provider list](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers)
-
-**3. Run setup and start**
+**3. Create directories and configure firewall**
 
 ```bash
 sudo bash setup.sh
-docker compose up -d
-docker compose logs -f gluetun   # confirm VPN is connected
 ```
 
-**4. Verify VPN is working**
+This creates the data/config directory structure, sets ownership, and adds
+firewall rules so the web UIs are only reachable from your LAN.
+
+## Run
+
+```bash
+docker compose up -d
+docker compose logs -f gluetun   # wait until you see "VPN is up"
+```
+
+Verify the VPN is working before adding anything to Radarr/Sonarr:
 
 ```bash
 docker exec -it qbittorrent curl -s https://ipinfo.io/ip
-# Must return a VPN IP, not your home IP
+# must return a VPN IP, not your home IP
 ```
+
+**Wire up the services**
+
+`configure.sh` connects Prowlarr to Radarr and Sonarr, adds qBittorrent as a
+download client in both, and sets the root media folders - the steps you would
+otherwise do manually in each web UI:
+
+```bash
+bash configure.sh
+```
+
+The script waits for all services to be ready, reads their API keys from the
+config files, and skips anything already configured so it is safe to re-run.
+
+After that, add indexers in Prowlarr (Indexers > Add) and add a Jellyfin media
+library pointing to `/data/media` (Dashboard > Libraries > Add Media Library).
 
 ## Web Interfaces
 
@@ -84,7 +123,9 @@ assigns a new address - only the URL you type changes.
 | Prowlarr    | `http://<your-ip>:9696`    | Manage torrent indexers      |
 | qBittorrent | `http://<your-ip>:8080`    | Torrent client UI            |
 
-## Post-start Wiring (one time)
+## Manual wiring (alternative to configure.sh)
+
+Skip this if you ran `configure.sh`.
 
 ### qBittorrent: set save paths
 Tools > Options > Downloads:
@@ -118,12 +159,14 @@ Prowlarr > Indexers > Add > search for your preferred public or private indexers
 
 ### Jellyfin: add libraries
 Dashboard > Libraries > Add Media Library:
-- Movies: `/data/movies`
-- TV Shows: `/data/tv`
+- Movies: `/data/media/movies`
+- TV Shows: `/data/media/tv`
 
 ## Usage
 
-Open Radarr or Sonarr in a browser, search for a title, select a quality profile and click **Add**. The stack handles the rest - search, download, rename, and import into Jellyfin automatically.
+Open Radarr or Sonarr in a browser, search for a title, select a quality
+profile and click **Add**. The stack handles the rest - search, download,
+rename, and import into Jellyfin automatically.
 
 ## Maintenance
 
