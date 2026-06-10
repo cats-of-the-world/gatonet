@@ -50,6 +50,12 @@ arr_has() {
   curl -sf -H "X-Api-Key: $key" "$url" 2>/dev/null | grep -q "$needle"
 }
 
+# Escape a string for embedding in a JSON value
+json_escape() {
+  local s="${1//\\/\\\\}"
+  printf '%s' "${s//\"/\\\"}"
+}
+
 # Wait for all services
 
 section "Waiting for services"
@@ -78,9 +84,14 @@ echo "  Sonarr   : ${SONARR_KEY:0:8}..."
 
 section "qBittorrent"
 
-read -rp  "  Username [admin]: "    QB_USER; QB_USER="${QB_USER:-admin}"
-read -rsp "  Password [adminadmin]: " QB_PASS; echo ""
-QB_PASS="${QB_PASS:-adminadmin}"
+echo "  Fresh installs print a one-time password to the container logs:"
+echo "    docker logs qbittorrent 2>&1 | grep -i password"
+read -rp  "  Username [admin]: " QB_USER; QB_USER="${QB_USER:-admin}"
+read -rsp "  Password: " QB_PASS; echo ""
+while [[ -z "$QB_PASS" ]]; do
+  echo "  Required - cannot be empty."
+  read -rsp "  Password: " QB_PASS; echo ""
+done
 
 QB_JAR=$(mktemp)
 QB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -c "$QB_JAR" \
@@ -93,13 +104,15 @@ if [[ "$QB_STATUS" != "200" && "$QB_STATUS" != "204" ]]; then
   rm -f "$QB_JAR"; exit 1
 fi
 
-# Determine VPN tunnel interface name from VPN type
-case "${VPN_TYPE:-wireguard}" in
-  wireguard) QB_IFACE="wg0" ;;
-  *)         QB_IFACE="tun0" ;;
-esac
+# Gluetun names its VPN interface tun0 for both WireGuard and OpenVPN
+# (VPN_INTERFACE default). Binding qBittorrent to it is defense-in-depth on
+# top of gluetun's own kill-switch.
+QB_IFACE="tun0"
 
-QB_PREFS="{\"save_path\":\"/data/downloads/complete\",\"temp_path\":\"/data/downloads/incomplete\",\"temp_path_enabled\":true,\"current_interface_name\":\"$QB_IFACE\",\"current_interface_address\":\"0.0.0.0\"}"
+# web_ui_username/web_ui_password persist the credentials used above.
+# Without this, the auto-generated temporary password changes on every
+# container restart and breaks the download client set up in Radarr/Sonarr.
+QB_PREFS="{\"save_path\":\"/data/downloads/complete\",\"temp_path\":\"/data/downloads/incomplete\",\"temp_path_enabled\":true,\"current_interface_name\":\"$QB_IFACE\",\"current_interface_address\":\"0.0.0.0\",\"web_ui_username\":\"$(json_escape "$QB_USER")\",\"web_ui_password\":\"$(json_escape "$QB_PASS")\"}"
 
 curl -s -b "$QB_JAR" \
   -X POST "http://127.0.0.1:8080/api/v2/app/setPreferences" \
@@ -107,8 +120,28 @@ curl -s -b "$QB_JAR" \
   --data-urlencode "json=$QB_PREFS" \
   >/dev/null
 
+# Categories with save paths so movies and tv land in separate folders
+# (matches the directory layout created by setup.sh)
+for _cat in movies tv; do
+  _status=$(curl -s -o /dev/null -w "%{http_code}" -b "$QB_JAR" \
+    -X POST "http://127.0.0.1:8080/api/v2/torrents/createCategory" \
+    -H "Referer: http://127.0.0.1:8080" \
+    --data-urlencode "category=$_cat" \
+    --data-urlencode "savePath=/data/downloads/complete/$_cat")
+  if [[ "$_status" != "200" ]]; then
+    # 409 = category exists; update its save path instead
+    curl -s -b "$QB_JAR" \
+      -X POST "http://127.0.0.1:8080/api/v2/torrents/editCategory" \
+      -H "Referer: http://127.0.0.1:8080" \
+      --data-urlencode "category=$_cat" \
+      --data-urlencode "savePath=/data/downloads/complete/$_cat" \
+      >/dev/null
+  fi
+done
+
 rm -f "$QB_JAR"
-echo "  Save paths configured."
+echo "  Save paths and categories configured."
+echo "  WebUI credentials saved (the temporary log password is now permanent)."
 echo "  Network interface bound to $QB_IFACE (VPN tunnel only)."
 
 # Prowlarr -> Radarr
@@ -135,6 +168,35 @@ else
     "{\"syncLevel\":\"fullSync\",\"name\":\"Sonarr\",\"implementationName\":\"Sonarr\",\"implementation\":\"Sonarr\",\"configContract\":\"SonarrSettings\",\"tags\":[],\"fields\":[{\"name\":\"prowlarrUrl\",\"value\":\"http://prowlarr:9696\"},{\"name\":\"baseUrl\",\"value\":\"http://sonarr:8989\"},{\"name\":\"apiKey\",\"value\":\"$SONARR_KEY\"},{\"name\":\"syncCategories\",\"value\":[5000,5010,5020,5030,5040,5045,5050]}]}" \
     >/dev/null
   echo "  Connected."
+fi
+
+# Prowlarr -> FlareSolverr
+# Registered as an indexer proxy gated behind a "flaresolverr" tag, so it only
+# applies to indexers you tag with it (proxying everything through a headless
+# browser would slow down all searches).
+
+section "Prowlarr -> FlareSolverr"
+
+if arr_has "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/indexerProxy" "\"FlareSolverr\""; then
+  echo "  Already configured, skipping."
+else
+  _tags=$(curl -sf -H "X-Api-Key: $PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/tag" 2>/dev/null || echo "[]")
+  FS_TAG_ID=$(echo "$_tags" | grep -oP '\{[^{}]*"label":"flaresolverr"[^{}]*\}' | grep -oP '(?<="id":)\d+' | head -1)
+  if [[ -z "$FS_TAG_ID" ]]; then
+    FS_TAG_ID=$(arr_post "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/tag" '{"label":"flaresolverr"}' \
+      | grep -oP '(?<="id":)\d+' | head -1)
+  fi
+
+  if [[ -z "$FS_TAG_ID" ]]; then
+    echo "  WARNING: could not create the flaresolverr tag, skipping."
+  elif arr_post "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/indexerProxy" \
+    "{\"name\":\"FlareSolverr\",\"implementationName\":\"FlareSolverr\",\"implementation\":\"FlareSolverr\",\"configContract\":\"FlareSolverrSettings\",\"tags\":[$FS_TAG_ID],\"fields\":[{\"name\":\"host\",\"value\":\"http://flaresolverr:8191/\"},{\"name\":\"requestTimeout\",\"value\":60}]}" \
+    >/dev/null; then
+    echo "  Connected. Add the 'flaresolverr' tag to Cloudflare-protected indexers to use it."
+  else
+    echo "  WARNING: could not add FlareSolverr proxy. Is the container running?"
+    echo "           Check: docker compose logs flaresolverr"
+  fi
 fi
 
 # Radarr: download client + root folder

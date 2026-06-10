@@ -8,14 +8,15 @@ A containerized media stack for automated movie and TV show downloading and stre
 
 ## Stack
 
-| Container    | Role                                          |
-|--------------|-----------------------------------------------|
-| Gluetun      | VPN tunnel + kill-switch for torrent traffic  |
-| qBittorrent  | Torrent client (runs inside Gluetun's network)|
-| Prowlarr     | Indexer aggregator                            |
-| Radarr       | Movie automation                              |
-| Sonarr       | TV show automation                            |
-| Jellyfin     | Media server, stream from any browser or app  |
+| Container    | Role                                            |
+|--------------|-------------------------------------------------|
+| Gluetun      | VPN tunnel + kill-switch for torrent traffic    |
+| qBittorrent  | Torrent client (runs inside Gluetun's network)  |
+| Prowlarr     | Indexer aggregator                              |
+| FlareSolverr | Cloudflare bypass for protected indexers        |
+| Radarr       | Movie automation                                |
+| Sonarr       | TV show automation                              |
+| Jellyfin     | Media server, stream from any browser or app    |
 
 ## Architecture
 
@@ -96,13 +97,23 @@ docker exec -it qbittorrent curl -s https://ipinfo.io/ip
 
 **Wire up the services**
 
-`configure.sh` connects Prowlarr to Radarr and Sonarr, adds qBittorrent as a
-download client in both, and sets the root media folders - the steps you would
-otherwise do manually in each web UI:
+`configure.sh` connects Prowlarr to Radarr, Sonarr and FlareSolverr, adds
+qBittorrent as a download client in both, and sets the root media folders -
+the steps you would otherwise do manually in each web UI:
 
 ```bash
 bash configure.sh
 ```
+
+The script prompts for the qBittorrent password. Fresh installs generate a
+temporary one - find it with:
+
+```bash
+docker logs qbittorrent 2>&1 | grep -i password
+```
+
+The script makes that password permanent (otherwise it changes on every
+container restart and breaks the Radarr/Sonarr download client connection).
 
 The script waits for all services to be ready, reads their API keys from the
 config files, and skips anything already configured so it is safe to re-run.
@@ -156,6 +167,15 @@ Settings > Media Management:
 
 ### Prowlarr: add indexers
 Prowlarr > Indexers > Add > search for your preferred public or private indexers.
+
+### Prowlarr to FlareSolverr (for Cloudflare-protected indexers)
+1. Prowlarr > Settings > Indexers > Add Indexer Proxy > FlareSolverr
+   - Host: `http://flaresolverr:8191/`
+   - Tag: `flaresolverr`
+2. Add the `flaresolverr` tag to any indexer that needs Cloudflare bypass.
+
+FlareSolverr has no published port - it is only reachable from inside the
+Docker network.
 
 ### Jellyfin: add libraries
 Dashboard > Libraries > Add Media Library:

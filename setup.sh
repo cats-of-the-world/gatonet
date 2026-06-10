@@ -91,13 +91,19 @@ else
   # place to restrict access to container ports.
   if iptables -L DOCKER-USER &>/dev/null 2>&1; then
     echo "  Adding DOCKER-USER iptables rules..."
+    # Match only traffic arriving on the WAN interface. DOCKER-USER sits in the
+    # FORWARD chain, so an unscoped DROP on e.g. --dport 8080 would also kill
+    # outbound container traffic to external hosts on that port (indexers etc.).
     for port in "${PORTS[@]}"; do
       # Remove any existing rules for this port (idempotent re-runs).
+      # The unscoped variants clean up rules written by older versions.
       iptables -D DOCKER-USER -p tcp --dport "$port" -s "$_lan_subnet" -j RETURN 2>/dev/null || true
       iptables -D DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null || true
+      iptables -D DOCKER-USER -i "$_wan_iface" -p tcp --dport "$port" -s "$_lan_subnet" -j RETURN 2>/dev/null || true
+      iptables -D DOCKER-USER -i "$_wan_iface" -p tcp --dport "$port" -j DROP 2>/dev/null || true
       # Insert in reverse order: RETURN is evaluated first, DROP second.
-      iptables -I DOCKER-USER -p tcp --dport "$port" -j DROP
-      iptables -I DOCKER-USER -p tcp --dport "$port" -s "$_lan_subnet" -j RETURN
+      iptables -I DOCKER-USER -i "$_wan_iface" -p tcp --dport "$port" -j DROP
+      iptables -I DOCKER-USER -i "$_wan_iface" -p tcp --dport "$port" -s "$_lan_subnet" -j RETURN
     done
 
     # Persist across reboots if tooling is available
