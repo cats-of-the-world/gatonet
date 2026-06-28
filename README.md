@@ -16,16 +16,17 @@ A containerized media stack for automated movie and TV show downloading and stre
 | FlareSolverr | Cloudflare bypass for protected indexers        |
 | Radarr       | Movie automation                                |
 | Sonarr       | TV show automation                              |
+| Lidarr       | Music automation (lossless/FLAC capable)        |
 | Jellyfin     | Media server, stream from any browser or app    |
 
 ## Architecture
 
 ```
-Browser --> Radarr / Sonarr --> qBittorrent --> [ VPN ] --> Internet
-                  |                   |
-              Prowlarr            Downloads
-              (indexers)              |
-                               Jellyfin (stream)
+Browser --> Radarr / Sonarr / Lidarr --> qBittorrent --> [ VPN ] --> Internet
+                  |                           |
+              Prowlarr                    Downloads
+              (indexers)                      |
+                                       Jellyfin (stream)
 ```
 
 Ports bind to all interfaces but are restricted to LAN-only by firewall rules
@@ -97,8 +98,8 @@ docker exec -it qbittorrent curl -s https://ipinfo.io/ip
 
 **Wire up the services**
 
-`configure.sh` connects Prowlarr to Radarr, Sonarr and FlareSolverr, adds
-qBittorrent as a download client in both, and sets the root media folders -
+`configure.sh` connects Prowlarr to Radarr, Sonarr, Lidarr and FlareSolverr,
+adds qBittorrent as a download client in each, and sets the root media folders -
 the steps you would otherwise do manually in each web UI:
 
 ```bash
@@ -118,8 +119,14 @@ container restart and breaks the Radarr/Sonarr download client connection).
 The script waits for all services to be ready, reads their API keys from the
 config files, and skips anything already configured so it is safe to re-run.
 
-After that, add indexers in Prowlarr (Indexers > Add) and add a Jellyfin media library pointing to `/data/movies` and `/data/tv`
+After that, add indexers in Prowlarr (Indexers > Add) and add Jellyfin media
+libraries pointing to `/data/movies`, `/data/tv` and `/data/music`
 (Dashboard > Libraries > Add Media Library).
+
+For high-quality music, set Lidarr's quality profile to prefer lossless: Lidarr
+> Settings > Profiles > Quality Profile, enable FLAC (and FLAC 24bit for hi-res)
+and place them above the lossy formats. Make sure your Prowlarr indexers carry
+the Audio categories.
 
 ## Web Interfaces
 
@@ -131,6 +138,7 @@ assigns a new address - only the URL you type changes.
 | Jellyfin    | `http://<your-ip>:8096`    | Stream movies and TV shows   |
 | Radarr      | `http://<your-ip>:7878`    | Add and manage movies        |
 | Sonarr      | `http://<your-ip>:8989`    | Add and manage TV shows      |
+| Lidarr      | `http://<your-ip>:8686`    | Add and manage music         |
 | Prowlarr    | `http://<your-ip>:9696`    | Manage torrent indexers      |
 | qBittorrent | `http://<your-ip>:8080`    | Torrent client UI            |
 
@@ -143,19 +151,21 @@ Tools > Options > Downloads:
 - Default save path: `/data/downloads/complete`
 - Temp path: `/data/downloads/incomplete`
 
-### Prowlarr to Radarr and Sonarr
+### Prowlarr to Radarr, Sonarr and Lidarr
 1. Prowlarr > Settings > Apps > Add > Radarr
    - Radarr URL: `http://radarr:7878`
    - API key: Radarr > Settings > General
 2. Repeat for Sonarr (`http://sonarr:8989`)
+3. Repeat for Lidarr (`http://lidarr:8686`)
 
-### Radarr and Sonarr to qBittorrent
+### Radarr, Sonarr and Lidarr to qBittorrent
 All containers share the same `/data` mount, so paths are consistent and no
 Remote Path Mapping is needed.
 
 1. Radarr > Settings > Download Clients > Add > qBittorrent
    - Host: `gluetun`, Port: `8080`, Category: `movies`
 2. Repeat for Sonarr (Category: `tv`)
+3. Repeat for Lidarr (Category: `music`)
 
 ### Radarr: set paths
 Settings > Media Management:
@@ -164,6 +174,13 @@ Settings > Media Management:
 ### Sonarr: set paths
 Settings > Media Management:
 - Root folder: `/data/media/tv`
+
+### Lidarr: set paths and quality
+Settings > Media Management:
+- Root folder: `/data/media/music`
+
+For high-quality music, Settings > Profiles > Quality Profile: enable FLAC (and
+FLAC 24bit for hi-res) and rank them above the lossy formats.
 
 ### Prowlarr: add indexers
 Prowlarr > Indexers > Add > search for your preferred public or private indexers.
@@ -181,12 +198,13 @@ Docker network.
 Dashboard > Libraries > Add Media Library:
 - Movies: `/data/movies`
 - TV Shows: `/data/tv`
+- Music: `/data/music`
 
 ## Usage
 
-Open Radarr or Sonarr in a browser, search for a title, select a quality
-profile and click **Add**. The stack handles the rest - search, download,
-rename, and import into Jellyfin automatically.
+Open Radarr, Sonarr or Lidarr in a browser, search for a title (or artist /
+album in Lidarr), select a quality profile and click **Add**. The stack handles
+the rest - search, download, rename, and import into Jellyfin automatically.
 
 ## Maintenance
 

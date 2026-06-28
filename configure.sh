@@ -62,6 +62,7 @@ section "Waiting for services"
 wait_for "http://127.0.0.1:9696/api/v1/health" "Prowlarr"
 wait_for "http://127.0.0.1:7878/api/v3/health" "Radarr"
 wait_for "http://127.0.0.1:8989/api/v3/health" "Sonarr"
+wait_for "http://127.0.0.1:8686/api/v1/health" "Lidarr"
 wait_for "http://127.0.0.1:8080"               "qBittorrent"
 
 # Read API keys from config files
@@ -71,14 +72,17 @@ section "Reading API keys"
 PROWLARR_KEY=$(get_api_key "$CONFIG_PATH/prowlarr/config.xml")
 RADARR_KEY=$(get_api_key "$CONFIG_PATH/radarr/config.xml")
 SONARR_KEY=$(get_api_key "$CONFIG_PATH/sonarr/config.xml")
+LIDARR_KEY=$(get_api_key "$CONFIG_PATH/lidarr/config.xml")
 
 [[ -z "$PROWLARR_KEY" ]] && { echo "  ERROR: Prowlarr key not found in $CONFIG_PATH/prowlarr/config.xml"; exit 1; }
 [[ -z "$RADARR_KEY" ]]   && { echo "  ERROR: Radarr key not found"; exit 1; }
 [[ -z "$SONARR_KEY" ]]   && { echo "  ERROR: Sonarr key not found"; exit 1; }
+[[ -z "$LIDARR_KEY" ]]   && { echo "  ERROR: Lidarr key not found"; exit 1; }
 
 echo "  Prowlarr : ${PROWLARR_KEY:0:8}..."
 echo "  Radarr   : ${RADARR_KEY:0:8}..."
 echo "  Sonarr   : ${SONARR_KEY:0:8}..."
+echo "  Lidarr   : ${LIDARR_KEY:0:8}..."
 
 # qBittorrent
 
@@ -120,9 +124,9 @@ curl -s -b "$QB_JAR" \
   --data-urlencode "json=$QB_PREFS" \
   >/dev/null
 
-# Categories with save paths so movies and tv land in separate folders
+# Categories with save paths so movies, tv and music land in separate folders
 # (matches the directory layout created by setup.sh)
-for _cat in movies tv; do
+for _cat in movies tv music; do
   _status=$(curl -s -o /dev/null -w "%{http_code}" -b "$QB_JAR" \
     -X POST "http://127.0.0.1:8080/api/v2/torrents/createCategory" \
     -H "Referer: http://127.0.0.1:8080" \
@@ -166,6 +170,20 @@ if arr_has "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/applications" "\"Sonarr
 else
   arr_post "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/applications" \
     "{\"syncLevel\":\"fullSync\",\"name\":\"Sonarr\",\"implementationName\":\"Sonarr\",\"implementation\":\"Sonarr\",\"configContract\":\"SonarrSettings\",\"tags\":[],\"fields\":[{\"name\":\"prowlarrUrl\",\"value\":\"http://prowlarr:9696\"},{\"name\":\"baseUrl\",\"value\":\"http://sonarr:8989\"},{\"name\":\"apiKey\",\"value\":\"$SONARR_KEY\"},{\"name\":\"syncCategories\",\"value\":[5000,5010,5020,5030,5040,5045,5050]}]}" \
+    >/dev/null
+  echo "  Connected."
+fi
+
+# Prowlarr -> Lidarr
+# syncCategories 3000-3040 are the Audio categories (MP3, lossless/FLAC, etc.)
+
+section "Prowlarr -> Lidarr"
+
+if arr_has "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/applications" "\"Lidarr\""; then
+  echo "  Already connected, skipping."
+else
+  arr_post "$PROWLARR_KEY" "http://127.0.0.1:9696/api/v1/applications" \
+    "{\"syncLevel\":\"fullSync\",\"name\":\"Lidarr\",\"implementationName\":\"Lidarr\",\"implementation\":\"Lidarr\",\"configContract\":\"LidarrSettings\",\"tags\":[],\"fields\":[{\"name\":\"prowlarrUrl\",\"value\":\"http://prowlarr:9696\"},{\"name\":\"baseUrl\",\"value\":\"http://lidarr:8686\"},{\"name\":\"apiKey\",\"value\":\"$LIDARR_KEY\"},{\"name\":\"syncCategories\",\"value\":[3000,3010,3020,3030,3040]}]}" \
     >/dev/null
   echo "  Connected."
 fi
@@ -241,7 +259,28 @@ else
   echo "  Root folder /data/media/tv added."
 fi
 
+# Lidarr: download client + root folder
+
+section "Lidarr"
+
+if arr_has "$LIDARR_KEY" "http://127.0.0.1:8686/api/v1/downloadclient" "\"qBittorrent\""; then
+  echo "  Download client already configured, skipping."
+else
+  arr_post "$LIDARR_KEY" "http://127.0.0.1:8686/api/v1/downloadclient" \
+    "{\"enable\":true,\"protocol\":\"torrent\",\"priority\":1,\"name\":\"qBittorrent\",\"implementationName\":\"qBittorrent\",\"implementation\":\"QBittorrent\",\"configContract\":\"QBittorrentSettings\",\"tags\":[],\"fields\":[{\"name\":\"host\",\"value\":\"gluetun\"},{\"name\":\"port\",\"value\":8080},{\"name\":\"username\",\"value\":\"$QB_USER\"},{\"name\":\"password\",\"value\":\"$QB_PASS\"},{\"name\":\"musicCategory\",\"value\":\"music\"},{\"name\":\"initialState\",\"value\":0},{\"name\":\"sequentialOrder\",\"value\":false},{\"name\":\"firstAndLast\",\"value\":false}]}" \
+    >/dev/null
+  echo "  qBittorrent connected."
+fi
+
+if arr_has "$LIDARR_KEY" "http://127.0.0.1:8686/api/v1/rootfolder" "/data/media/music"; then
+  echo "  Root folder already configured, skipping."
+else
+  arr_post "$LIDARR_KEY" "http://127.0.0.1:8686/api/v1/rootfolder" \
+    "{\"name\":\"Music\",\"path\":\"/data/media/music\",\"defaultMetadataProfileId\":1,\"defaultQualityProfileId\":1,\"defaultMonitorOption\":\"all\"}" >/dev/null
+  echo "  Root folder /data/media/music added."
+fi
+
 # Done
 
 echo ""
-echo "==> All done. Open Radarr or Sonarr and search for something to download."
+echo "==> All done. Open Radarr, Sonarr or Lidarr and search for something to download."

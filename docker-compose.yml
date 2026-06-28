@@ -155,6 +155,32 @@ services:
       - arr
     restart: unless-stopped
 
+  # Music automation
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_PATH}/lidarr:/config
+      - ${DATA_PATH}:/data
+    ports:
+      - "8686:8686"
+    networks:
+      - arr
+    restart: unless-stopped
+
   # Media server
   # Isolated on its own network  - cannot reach the arr stack even if compromised.
   jellyfin:

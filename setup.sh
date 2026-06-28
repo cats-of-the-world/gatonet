@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORTS=(8080 9696 7878 8989 8096)
+PORTS=(8080 9696 7878 8989 8686 8096)
 
 # Load config
 if [[ ! -f .env ]]; then
@@ -19,12 +19,15 @@ dirs=(
   "$CONFIG_PATH/prowlarr"
   "$CONFIG_PATH/radarr"
   "$CONFIG_PATH/sonarr"
+  "$CONFIG_PATH/lidarr"
   "$CONFIG_PATH/jellyfin"
   "$DATA_PATH/downloads/complete/movies"
   "$DATA_PATH/downloads/complete/tv"
+  "$DATA_PATH/downloads/complete/music"
   "$DATA_PATH/downloads/incomplete"
   "$DATA_PATH/media/movies"
   "$DATA_PATH/media/tv"
+  "$DATA_PATH/media/music"
 )
 for d in "${dirs[@]}"; do
   mkdir -p "$d"
@@ -134,6 +137,7 @@ echo "Web UIs (accessible from your home network):"
 echo "  Jellyfin    : http://${_current_ip}:8096"
 echo "  Radarr      : http://${_current_ip}:7878"
 echo "  Sonarr      : http://${_current_ip}:8989"
+echo "  Lidarr      : http://${_current_ip}:8686"
 echo "  Prowlarr    : http://${_current_ip}:9696"
 echo "  qBittorrent : http://${_current_ip}:8080"
 echo ""
